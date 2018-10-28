@@ -1,0 +1,7 @@
+name: neuro27_env
+dependencies:
+  - python=2.7
+  - numpy
+  - menpo::opencv3
+  - jupyterlab
+  - matplotlib

@@ -1,0 +1,7 @@
+name: neuro_env
+dependencies:
+  - python=3.5
+  - numpy
+  - menpo::opencv3
+  - jupyterlab
+  - matplotlib
