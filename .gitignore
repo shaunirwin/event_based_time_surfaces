@@ -3,3 +3,4 @@
 event-Python
 datasets
 *.swp
+*.pyc
