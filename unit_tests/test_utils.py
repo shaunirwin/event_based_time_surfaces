@@ -1,6 +1,6 @@
 import numpy as np
 
-from lib.utils import cosine_dist
+from lib.utils import cosine_dist, euclidean_dist
 
 
 def test_cosine_dist_both_vectors_same_direction():
@@ -25,3 +25,19 @@ def test_cosine_dist_both_vectors_opposite_direction():
     b = - a.copy() * 2
 
     assert cosine_dist(a, b) == -1
+
+
+def test_euclidean_distance_for_same_vectors_gives_0():
+    a = np.array([1, 2])
+
+    b = np.array([1, 2])
+
+    assert euclidean_dist(a, b) == 0
+
+
+def test_euclidean_distance_for_different_vectors_gives_non_zero_scalar():
+    a = np.array([1, 0])
+
+    b = np.array([0, 1])
+
+    assert euclidean_dist(a, b) == np.sqrt(2)

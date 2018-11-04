@@ -3,7 +3,7 @@ import numpy as np
 
 from event_Python import eventvision
 from lib.spatio_temporal_feature import TimeSurface
-from lib.utils import cosine_dist
+from lib.utils import cosine_dist, euclidean_dist
 
 
 if __name__ == '__main__':
@@ -45,14 +45,21 @@ if __name__ == '__main__':
 
     # initialise and plot each of the time surface prototypes
 
-    for i in range(N_1):
-        x = ev.data[i].x
-        y = ev.data[i].y
+    # for i in range(N_1):
+    #     x = ev.data[i].x
+    #     y = ev.data[i].y
+    #
+    #     if ev.data[i].p:
+    #         C_1_on[i][y, x] = 1
+    #     else:
+    #         C_1_off[i][y, x] = 1
 
-        if ev.data[i].p:
-            C_1_on[i][y, x] = 1
-        else:
-            C_1_off[i][y, x] = 1
+    for i in range(N_1):
+        x = ev.width / N_1 * i
+        y = ev.height / N_1 * i
+
+        C_1_on[i][y, x] = 1
+        C_1_off[i][y, x] = 1
 
     fig, ax = plt.subplots(2, N_1, figsize=(25, 5))
 
@@ -68,24 +75,37 @@ if __name__ == '__main__':
     # initialise time surface
     S = TimeSurface(ev.height, ev.width, region_size=1, time_constant=10000 * 2)
 
+    # TODO: should we have a p_on and p_off, to count separately for each prototype?
     p = [1] * N_1
 
-    for e in ev.data:  # [:88]:
+    for e in ev.data: #[:20]:
 
         S.process_event(e)
 
+        # plt.imshow(S.time_surface_on)
+        # plt.show()
+
         # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
 
-        dists = [cosine_dist(c_k.reshape(-1), S.time_surface_on.reshape(-1)) for c_k in C_1_on]
+        if e.p:
+            dists = [euclidean_dist(c_k.reshape(-1), S.time_surface_on.reshape(-1)) for c_k in C_1_on]
+        else:
+            dists = [euclidean_dist(c_k.reshape(-1), S.time_surface_off.reshape(-1)) for c_k in C_1_off]
 
         k = np.argmin(dists)
 
+        print('k:', k, dists)
+
         # update prototype that is closest to
 
-        alpha = 0.01 / (1 + p[k] / 2000.)
-        beta = cosine_dist(C_1_on[k].reshape(-1), S.time_surface_on.reshape(-1))
+        alpha = 0.01 / (1 + p[k] / 200.)
 
-        C_1_on[k] += alpha * (S.time_surface_on - beta * C_1_on[k])
+        if e.p:
+            beta = cosine_dist(C_1_on[k].reshape(-1), S.time_surface_on.reshape(-1))
+            C_1_on[k] += alpha * (S.time_surface_on - beta * C_1_on[k])
+        else:
+            beta = cosine_dist(C_1_off[k].reshape(-1), S.time_surface_off.reshape(-1))
+            C_1_off[k] += alpha * (S.time_surface_off - beta * C_1_off[k])
 
         p[k] += 1
 
