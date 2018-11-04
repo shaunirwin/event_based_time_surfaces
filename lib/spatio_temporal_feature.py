@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Feature(object):
+class TimeSurface(object):
     def __init__(self, height, width, region_size, time_constant):
         self.height = height
         self.width = width
