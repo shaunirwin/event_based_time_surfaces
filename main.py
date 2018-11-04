@@ -3,6 +3,7 @@ import numpy as np
 
 from event_Python import eventvision
 from lib.spatio_temporal_feature import TimeSurface
+from lib.utils import cosine_dist
 
 
 if __name__ == '__main__':
@@ -75,15 +76,14 @@ if __name__ == '__main__':
 
         # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
 
-        dists = [np.linalg.norm(c_k - S.time_surface_on) for c_k in C_1_on]
+        dists = [cosine_dist(c_k.reshape(-1), S.time_surface_on.reshape(-1)) for c_k in C_1_on]
 
         k = np.argmin(dists)
 
         # update prototype that is closest to
 
         alpha = 0.01 / (1 + p[k] / 2000.)
-        beta = np.dot(C_1_on[k], S.time_surface_on) / (
-                    np.linalg.norm(C_1_on[k]) * np.linalg.norm(S.time_surface_on))
+        beta = cosine_dist(C_1_on[k].reshape(-1), S.time_surface_on.reshape(-1))
 
         C_1_on[k] += alpha * (S.time_surface_on - beta * C_1_on[k])
 
