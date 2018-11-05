@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 import numpy as np
+import argparse
 
 from event_Python import eventvision
 from lib.spatio_temporal_feature import TimeSurface
@@ -7,7 +8,13 @@ from lib.utils import cosine_dist, euclidean_dist
 
 
 if __name__ == '__main__':
-    ev = eventvision.read_dataset(r'datasets\mnist\Test\0\00004.bin')
+    parser = argparse.ArgumentParser(description='Train digit recogniser')
+    parser.add_argument('--input_file', action='store', default='datasets/mnist/Test/0/00004.bin',
+                        help='Path to event file')
+
+    args = parser.parse_args()
+
+    ev = eventvision.read_dataset(args.input_file)
 
     # #############   plot time surface for whole event sequence  ###############
 
