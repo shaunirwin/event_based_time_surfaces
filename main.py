@@ -9,18 +9,18 @@ from lib.utils import cosine_dist, euclidean_dist
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train digit recogniser')
-    parser.add_argument('--input_file', action='store', default='datasets/mnist/Test/0/00004.bin',
+    parser.add_argument('--input_files', action='store', nargs='+', default='datasets/mnist/Test/0/00004.bin',
                         help='Path to event file')
 
     args = parser.parse_args()
 
-    ev = eventvision.read_dataset(args.input_file)
+    ev = eventvision.read_dataset(args.input_files[0])
 
     # #############   plot time surface for whole event sequence  ###############
 
     # plot time context
 
-    ts = TimeSurface(ev.height, ev.width, region_size=1, time_constant=10000 * 2)
+    ts = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
 
     # set time to pause at
     t_pause = 70000
@@ -50,23 +50,37 @@ if __name__ == '__main__':
     C_1_on = [np.zeros((ev.height, ev.width)) for _ in range(N_1)]
     C_1_off = [np.zeros((ev.height, ev.width)) for _ in range(N_1)]
 
+    S_init = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
+
     # initialise and plot each of the time surface prototypes
 
-    # for i in range(N_1):
-    #     x = ev.data[i].x
-    #     y = ev.data[i].y
-    #
-    #     if ev.data[i].p:
-    #         C_1_on[i][y, x] = 1
-    #     else:
-    #         C_1_off[i][y, x] = 1
+    if False:
+        for i in range(N_1):
+            x = ev.data[i].x
+            y = ev.data[i].y
 
-    for i in range(N_1):
-        x = ev.width / N_1 * i
-        y = ev.height / N_1 * i
+            if ev.data[i].p:
+                C_1_on[i][y, x] = 1
+            else:
+                C_1_off[i][y, x] = 1
+    elif True:
+        for i in range(N_1):
+            x = ev.width / (N_1 + 1) * (i + 1)
+            y = ev.height / (N_1 + 1) * (i + 1)
 
-        C_1_on[i][y, x] = 1
-        C_1_off[i][y, x] = 1
+            C_1_on[i][y, x] = 1
+            C_1_off[i][y, x] = 1
+    else:
+        for i in range(N_1):
+            x = ev.data[i].x
+            y = ev.data[i].y
+
+            S_init.process_event(ev.data[i])
+
+            if ev.data[i].p:
+                C_1_on[i] = S_init.time_surface_on
+            else:
+                C_1_off[i] = S_init.time_surface_off
 
     fig, ax = plt.subplots(2, N_1, figsize=(25, 5))
 
@@ -78,6 +92,8 @@ if __name__ == '__main__':
     plt.show()
 
     # ############ Train time surface prototypes for layer 1 ############
+
+    event_data = [eventvision.read_dataset(f).data for f in args.input_files]
 
     # initialise time surface
     S = TimeSurface(ev.height, ev.width, region_size=1, time_constant=10000 * 2)
