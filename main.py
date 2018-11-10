@@ -93,7 +93,10 @@ if __name__ == '__main__':
 
     # ############ Train time surface prototypes for layer 1 ############
 
-    event_data = [eventvision.read_dataset(f).data for f in args.input_files]
+    event_data = []
+
+    for f in args.input_files:
+        event_data.extend(eventvision.read_dataset(f).data)
 
     # initialise time surface
     S = TimeSurface(ev.height, ev.width, region_size=1, time_constant=10000 * 2)
@@ -101,7 +104,7 @@ if __name__ == '__main__':
     # TODO: should we have a p_on and p_off, to count separately for each prototype?
     p = [1] * N_1
 
-    for e in ev.data: #[:20]:
+    for e in event_data: #[:20]:
 
         S.process_event(e)
 
@@ -121,7 +124,7 @@ if __name__ == '__main__':
 
         # update prototype that is closest to
 
-        alpha = 0.01 / (1 + p[k] / 200.)
+        alpha = 0.01 / (1 + p[k] / 20000.)
 
         if e.p:
             beta = cosine_dist(C_1_on[k].reshape(-1), S.time_surface_on.reshape(-1))
