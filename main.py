@@ -10,6 +10,42 @@ from lib.utils import cosine_dist, euclidean_dist
 from lib.noise_filter import remove_isolated_pixels
 
 
+def visualise_time_surface_for_event_stream(N, tau, r, width, height, events):
+    # plot time context
+
+    ts_1_1 = TimeSurface(height, width, region_size=r, time_constant=tau)
+    ts_1_2 = TimeSurface(height, width, region_size=r, time_constant=tau)
+
+    # set time to pause at
+    t_pause = 70000
+
+    # filter out outliers
+
+    event_data = events
+    event_data_filt, _, _ = remove_isolated_pixels(event_data, eps=3, min_samples=20)
+
+    for e in event_data_filt:
+        if e.ts <= t_pause:
+            if e.p:
+                ts_1_1.process_event(e)
+            else:
+                ts_1_2.process_event(e)
+
+    if True:
+        fig, ax = plt.subplots(2, 3, figsize=(10, 5))
+        ax[0, 0].imshow(ts_1_1.latest_times)
+        ax[0, 1].imshow(ts_1_1.time_context)
+        ax[0, 2].imshow(ts_1_1.time_surface)
+        ax[1, 0].imshow(ts_1_2.latest_times)
+        ax[1, 1].imshow(ts_1_2.time_context)
+        ax[1, 2].imshow(ts_1_2.time_surface)
+        ax[0, 0].set_title('Latest times')
+        ax[0, 1].set_title('Time context')
+        ax[0, 2].set_title('Time surface')
+
+        plt.show()
+
+
 def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_method=3, plot=False):
     """
     Initialise time surface prototypes ("features" or "cluster centers") for a layer
@@ -68,6 +104,61 @@ def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_me
     return C
 
 
+def train_layer(C, N, tau, r, width, height, events, polarities, layer_number, plot=False):
+    """
+    Train the time surface prototypes in a single layer
+
+    :param C: time surface prototypes (i.e. cluster centers) that have been initialised
+    :param N:
+    :param tau:
+    :param r:
+    :param width:
+    :param height:
+    :param events:
+    :param polarities:
+    :param layer_number: the number of this layer
+    :param plot:
+    :return:
+    """
+
+    # initialise time surface
+    S = [TimeSurface(height, width, region_size=r, time_constant=tau)] * polarities
+
+    p = [1] * N
+
+    for e in events:
+        S[e.p].process_event(e)
+
+        # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
+
+        dists = [euclidean_dist(c_k.reshape(-1), S[e.p].time_surface.reshape(-1)) for c_k in C]
+
+        k = np.argmin(dists)
+
+        print('k:', k, dists)
+
+        # update prototype that is closest to
+
+        alpha = 0.01 / (1 + p[k] / 20000.)
+
+        beta = cosine_dist(C[k].reshape(-1), S[e.p].time_surface.reshape(-1))
+        C[k] += alpha * (S[e.p].time_surface - beta * C[k])
+
+        p[k] += 1
+
+    print k
+    print(e, dists, k, alpha, beta, p)
+
+    if plot:
+        fig, ax = plt.subplots(1, N, figsize=(25, 5))
+
+        for i in range(N):
+            ax[i].imshow(C[i])
+            ax[i].set_title('Layer {}. Time surface {} (p={})'.format(layer_number, i, p[i]))
+
+        plt.show()
+
+
 def generate_layer_outputs(polarities, features, tau, r, width, height, events):
     """
     Generate events at the output of a layer from a stream of incoming events
@@ -114,54 +205,7 @@ def main():
 
     args = parser.parse_args()
 
-    # get event data files within folders
-
-    input_files_all = []
-
-    for folder in args.input_folders_training:
-        input_files = glob.glob(os.path.join(folder, '*.bin'))[:args.num_files_per_folder]
-        input_files_all.extend(input_files)
-        print('Num files from {}: {}'.format(folder, len(input_files)))
-
-    ev = eventvision.read_dataset(input_files_all[0])
-
-    # #############   plot time surface for whole event sequence  ###############
-
-    # plot time context
-
-    ts_1_1 = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
-    ts_1_2 = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
-
-    # set time to pause at
-    t_pause = 70000
-
-    # filter out outliers
-
-    event_data = ev.data
-    event_data_filt, _, _ = remove_isolated_pixels(event_data, eps=3, min_samples=20)
-
-    for e in event_data_filt:
-        if e.ts <= t_pause:
-            if e.p:
-                ts_1_1.process_event(e)
-            else:
-                ts_1_2.process_event(e)
-
-    if True:
-        fig, ax = plt.subplots(2, 3, figsize=(10, 5))
-        ax[0, 0].imshow(ts_1_1.latest_times)
-        ax[0, 1].imshow(ts_1_1.time_context)
-        ax[0, 2].imshow(ts_1_1.time_surface)
-        ax[1, 0].imshow(ts_1_2.latest_times)
-        ax[1, 1].imshow(ts_1_2.time_context)
-        ax[1, 2].imshow(ts_1_2.time_surface)
-        ax[0, 0].set_title('Latest times')
-        ax[0, 1].set_title('Time context')
-        ax[0, 2].set_title('Time surface')
-
-        plt.show()
-
-    # ############## Initialise time surface prototypes ##############
+    # ############ configure network parameters ###########
 
     N_1 = 4
     tau_1 = 20000
@@ -175,9 +219,18 @@ def main():
     tau_2 = tau_1 * K_tau
     r_2 = r_1 * K_r
 
-    C_1 = initialise_time_surface_prototypes(N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, plot=False)
+    # ########## get event data files within folders ##########
 
-    # ############ Train time surface prototypes for layer 1 ############
+    input_files_all = []
+
+    for folder in args.input_folders_training:
+        input_files = glob.glob(os.path.join(folder, '*.bin'))[:args.num_files_per_folder]
+        input_files_all.extend(input_files)
+        print('Num files from {}: {}'.format(folder, len(input_files)))
+
+    ev = eventvision.read_dataset(input_files_all[0])
+
+    # filter out outliers
 
     event_data = []
     event_data_filt = []
@@ -189,48 +242,15 @@ def main():
         event_data.extend(ev_data)
         event_data_filt.extend(ev_data_filt)
 
-    # initialise time surface
-    S_on = TimeSurface(ev.height, ev.width, region_size=r_1, time_constant=tau_1)
-    S_off = TimeSurface(ev.height, ev.width, region_size=r_1, time_constant=tau_1)
+    # plot time surface for single event sequence
 
-    p = [1] * N_1
+    visualise_time_surface_for_event_stream(N_1, tau_1, r_1, ev.width, ev.height, ev.data)
 
-    for e in event_data_filt:
+    # ############ Train time surface prototypes for layer 1 ############
 
-        if e.p:
-            S_on.process_event(e)
-            S = S_on
-        else:
-            S_off.process_event(e)
-            S = S_off
+    C_1 = initialise_time_surface_prototypes(N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, plot=True)
 
-        # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
-
-        dists = [euclidean_dist(c_k.reshape(-1), S.time_surface.reshape(-1)) for c_k in C_1]
-
-        k = np.argmin(dists)
-
-        print('k:', k, dists)
-
-        # update prototype that is closest to
-
-        alpha = 0.01 / (1 + p[k] / 20000.)
-
-        beta = cosine_dist(C_1[k].reshape(-1), S.time_surface.reshape(-1))
-        C_1[k] += alpha * (S.time_surface - beta * C_1[k])
-
-        p[k] += 1
-
-    print k
-    print(e, dists, k, alpha, beta, p)
-
-    fig, ax = plt.subplots(1, N_1, figsize=(25, 5))
-
-    for i in range(N_1):
-        ax[i].imshow(C_1[i])
-        ax[i].set_title('Layer 1. Time surface {} (p={})'.format(i, p[i]))
-
-    plt.show()
+    train_layer(C_1, N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, polarities=2, layer_number=1, plot=True)
 
     # ############ Train time surface prototypes for layer 2 ############
 
@@ -239,52 +259,9 @@ def main():
     event_data_2 = generate_layer_outputs(polarities=2, features=C_1, tau=tau_1, r=r_1, width=ev.width,
                                           height=ev.height, events=event_data_filt)
 
-    # initialise and plot each of the time surface prototypes
-
     C_2 = initialise_time_surface_prototypes(N_2, tau_2, r_2, ev.width, ev.height, event_data_2, plot=True)
 
-    # # initialise time surface
-    # S_on = TimeSurface(ev.height, ev.width, region_size=r_2, time_constant=tau_2)
-    # S_off = TimeSurface(ev.height, ev.width, region_size=r_2, time_constant=tau_2)
-    #
-    # p = [1] * N_1
-    #
-    # for e in event_data_filt:
-    #
-    #     if e.p:
-    #         S_on.process_event(e)
-    #         S = S_on
-    #     else:
-    #         S_off.process_event(e)
-    #         S = S_off
-    #
-    #     # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
-    #
-    #     dists = [euclidean_dist(c_k.reshape(-1), S.time_surface.reshape(-1)) for c_k in C_1]
-    #
-    #     k = np.argmin(dists)
-    #
-    #     print('k:', k, dists)
-    #
-    #     # update prototype that is closest to
-    #
-    #     alpha = 0.01 / (1 + p[k] / 20000.)
-    #
-    #     beta = cosine_dist(C_1[k].reshape(-1), S.time_surface.reshape(-1))
-    #     C_1[k] += alpha * (S.time_surface - beta * C_1[k])
-    #
-    #     p[k] += 1
-    #
-    # print k
-    # print(e, dists, k, alpha, beta, p)
-    #
-    # fig, ax = plt.subplots(1, N_1, figsize=(25, 5))
-    #
-    # for i in range(N_1):
-    #     ax[i].imshow(C_1[i])
-    #     ax[i].set_title('Layer 1. Time surface {} (p={})'.format(i, p[i]))
-    #
-    # plt.show()
+    train_layer(C_2, N_2, tau_2, r_2, ev.width, ev.height, event_data_2, polarities=N_1, layer_number=2, plot=True)
 
 
 if __name__ == '__main__':
