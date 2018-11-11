@@ -20,22 +20,26 @@ if __name__ == '__main__':
 
     # plot time context
 
-    ts = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
+    ts_1_1 = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
+    ts_1_2 = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
 
     # set time to pause at
     t_pause = 70000
 
     for e in ev.data:
         if e.ts <= t_pause:
-            ts.process_event(e)
+            if e.p:
+                ts_1_1.process_event(e)
+            else:
+                ts_1_2.process_event(e)
 
     fig, ax = plt.subplots(2, 3, figsize=(10, 5))
-    ax[0, 0].imshow(ts.latest_times_on)
-    ax[0, 1].imshow(ts.time_context_on)
-    ax[0, 2].imshow(ts.time_surface_on)
-    ax[1, 0].imshow(ts.latest_times_off)
-    ax[1, 1].imshow(ts.time_context_off)
-    ax[1, 2].imshow(ts.time_surface_off)
+    ax[0, 0].imshow(ts_1_1.latest_times)
+    ax[0, 1].imshow(ts_1_1.time_context)
+    ax[0, 2].imshow(ts_1_1.time_surface)
+    ax[1, 0].imshow(ts_1_2.latest_times)
+    ax[1, 1].imshow(ts_1_2.time_context)
+    ax[1, 2].imshow(ts_1_2.time_surface)
     ax[0, 0].set_title('Latest times')
     ax[0, 1].set_title('Time context')
     ax[0, 2].set_title('Time surface')
@@ -46,11 +50,12 @@ if __name__ == '__main__':
 
     # Choose number of prototypes for layer 1
     N_1 = 4
+    tau_1 = 20000
+    r_1 = 1
 
-    C_1_on = [np.zeros((ev.height, ev.width)) for _ in range(N_1)]
-    C_1_off = [np.zeros((ev.height, ev.width)) for _ in range(N_1)]
+    C_1 = [np.zeros((ev.height, ev.width)) for _ in range(N_1)]
 
-    S_init = TimeSurface(ev.height, ev.width, region_size=2, time_constant=10000 * 2)
+    S_init = TimeSurface(ev.height, ev.width, region_size=r_1, time_constant=tau_1)
 
     # initialise and plot each of the time surface prototypes
 
@@ -59,17 +64,13 @@ if __name__ == '__main__':
             x = ev.data[i].x
             y = ev.data[i].y
 
-            if ev.data[i].p:
-                C_1_on[i][y, x] = 1
-            else:
-                C_1_off[i][y, x] = 1
-    elif True:
+            C_1_on[i][y, x] = 1
+    elif False:
         for i in range(N_1):
             x = ev.width / (N_1 + 1) * (i + 1)
             y = ev.height / (N_1 + 1) * (i + 1)
 
-            C_1_on[i][y, x] = 1
-            C_1_off[i][y, x] = 1
+            C_1[i][y, x] = 1
     else:
         for i in range(N_1):
             x = ev.data[i].x
@@ -77,17 +78,13 @@ if __name__ == '__main__':
 
             S_init.process_event(ev.data[i])
 
-            if ev.data[i].p:
-                C_1_on[i] = S_init.time_surface_on
-            else:
-                C_1_off[i] = S_init.time_surface_off
+            C_1[i] = S_init.time_surface
 
-    fig, ax = plt.subplots(2, N_1, figsize=(25, 5))
+    fig, ax = plt.subplots(1, N_1, figsize=(25, 5))
 
     for i in range(N_1):
-        ax[0, i].imshow(C_1_on[i])
-        ax[1, i].imshow(C_1_off[i])
-        ax[0, i].set_title('Time surface {}'.format(i))
+        ax[i].imshow(C_1[i])
+        ax[i].set_title('Time surface {}'.format(i))
 
     plt.show()
 
@@ -99,24 +96,27 @@ if __name__ == '__main__':
         event_data.extend(eventvision.read_dataset(f).data)
 
     # initialise time surface
-    S = TimeSurface(ev.height, ev.width, region_size=1, time_constant=10000 * 2)
+    S_on = TimeSurface(ev.height, ev.width, region_size=r_1, time_constant=tau_1)
+    S_off = TimeSurface(ev.height, ev.width, region_size=r_1, time_constant=tau_1)
 
     # TODO: should we have a p_on and p_off, to count separately for each prototype?
     p = [1] * N_1
 
     for e in event_data: #[:20]:
 
-        S.process_event(e)
+        if e.p:
+            S_on.process_event(e)
+            S = S_on
+        else:
+            S_off.process_event(e)
+            S = S_off
 
         # plt.imshow(S.time_surface_on)
         # plt.show()
 
         # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
 
-        if e.p:
-            dists = [euclidean_dist(c_k.reshape(-1), S.time_surface_on.reshape(-1)) for c_k in C_1_on]
-        else:
-            dists = [euclidean_dist(c_k.reshape(-1), S.time_surface_off.reshape(-1)) for c_k in C_1_off]
+        dists = [euclidean_dist(c_k.reshape(-1), S.time_surface.reshape(-1)) for c_k in C_1]
 
         k = np.argmin(dists)
 
@@ -124,25 +124,20 @@ if __name__ == '__main__':
 
         # update prototype that is closest to
 
-        alpha = 0.01 / (1 + p[k] / 20000.)
+        alpha = 0.01 / (1 + p[k] / 20000.)      # TODO: is this value set equal to the time constant or is it a coincidence?
 
-        if e.p:
-            beta = cosine_dist(C_1_on[k].reshape(-1), S.time_surface_on.reshape(-1))
-            C_1_on[k] += alpha * (S.time_surface_on - beta * C_1_on[k])
-        else:
-            beta = cosine_dist(C_1_off[k].reshape(-1), S.time_surface_off.reshape(-1))
-            C_1_off[k] += alpha * (S.time_surface_off - beta * C_1_off[k])
+        beta = cosine_dist(C_1[k].reshape(-1), S.time_surface.reshape(-1))
+        C_1[k] += alpha * (S.time_surface - beta * C_1[k])
 
         p[k] += 1
 
     print k
     print(e, dists, k, alpha, beta, p)
 
-    fig, ax = plt.subplots(2, N_1, figsize=(25, 5))
+    fig, ax = plt.subplots(1, N_1, figsize=(25, 5))
 
     for i in range(N_1):
-        ax[0, i].imshow(C_1_on[i])
-        ax[1, i].imshow(C_1_off[i])
-        ax[0, i].set_title('Time surface {}'.format(i))
+        ax[i].imshow(C_1[i])
+        ax[i].set_title('Time surface {}'.format(i))
 
     plt.show()
