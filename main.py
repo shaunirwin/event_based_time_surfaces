@@ -10,7 +10,102 @@ from lib.utils import cosine_dist, euclidean_dist
 from lib.noise_filter import remove_isolated_pixels
 
 
-if __name__ == '__main__':
+def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_method=3, plot=False):
+    """
+    Initialise time surface prototypes ("features" or "cluster centers") for a layer
+
+    :param N: Number of features in this layer
+    :param tau: time constant [us]
+    :param r: radius [pixels]
+    :param width: [pixels]
+    :param height: [pixels]
+    :param events: list of incoming events. Must be at least as many elements as N.
+    :param init_method:
+    :param plot: if True, plot the initialised time surfaces
+    :return: N numpy arrays
+    """
+
+    C = [np.zeros((height, width)) for _ in range(N)]
+
+    S = TimeSurface(height, width, region_size=r, time_constant=tau)
+
+    # initialise each of the time surface prototypes
+
+    if init_method == 1:
+        for i in range(N):
+            x = events[i].x
+            y = events[i].y
+
+            C[i][y, x] = 1
+    elif init_method == 2:
+        for i in range(N):
+            x = width / (N + 1) * (i + 1)
+            y = height / (N + 1) * (i + 1)
+
+            C[i][y, x] = 1
+    elif init_method == 2:
+        # hard-coded locations
+        C[0][12, 11] = 1
+        C[1][13, 16] = 1
+        C[2][26, 8] = 1
+        C[3][24, 17] = 1
+    else:
+        for i in range(N):
+            S.process_event(events[i])
+            C[i] = S.time_surface
+
+    # plot the initialised time surface prototypes
+
+    if plot:
+        fig, ax = plt.subplots(1, N, figsize=(20, 5))
+
+        for i in range(N):
+            ax[i].imshow(C[i])
+            ax[i].set_title('Time surface {}'.format(i))
+
+        plt.show()
+
+    return C
+
+
+def generate_layer_outputs(polarities, features, tau, r, width, height, events):
+    """
+    Generate events at the output of a layer from a stream of incoming events
+
+    :param polarities: number of polarities of incoming events
+    :param features: list of trained features for this layer
+    :param tau: time constant [us]
+    :param r: radius [pixels]
+    :param width: [pixels]
+    :param height: [pixels]
+    :param events: list of incoming events. Must be at least as many elements as N.
+    :return: events at output of layer
+    """
+
+    S = [TimeSurface(height, width, region_size=r, time_constant=tau)] * polarities
+    events_out = []
+
+    for e in events:
+        # update time surface with incoming event. Select the time surface corresponding to polarity of event.
+
+        S[e.p].process_event(e)
+
+        # select the closest feature to this time surface
+
+        dists = [euclidean_dist(feature.reshape(-1), S[e.p].time_surface.reshape(-1)) for feature in features]
+
+        k = np.argmin(dists)
+
+        # create output event
+
+        e_out = e.copy()
+        e_out.p = k
+        events_out.append(e_out)
+
+    return events_out
+
+
+def main():
     parser = argparse.ArgumentParser(description='Train digit recogniser')
     parser.add_argument('--input_folders_training', action='store', nargs='+', default='datasets/mnist/Test/0',
                         help='Paths to folders containing event files')
@@ -68,52 +163,19 @@ if __name__ == '__main__':
 
     # ############## Initialise time surface prototypes ##############
 
-    # Choose number of prototypes for layer 1
     N_1 = 4
     tau_1 = 20000
-    r_1 = 1
+    r_1 = 2
 
-    C_1 = [np.zeros((ev.height, ev.width)) for _ in range(N_1)]
+    K_N = 2
+    K_tau = 2
+    K_r = 2
 
-    S_init = TimeSurface(ev.height, ev.width, region_size=r_1, time_constant=tau_1)
+    N_2 = N_1 * K_N
+    tau_2 = tau_1 * K_tau
+    r_2 = r_1 * K_r
 
-    # initialise and plot each of the time surface prototypes
-
-    if False:
-        for i in range(N_1):
-            x = event_data_filt[i].x
-            y = event_data_filt[i].y
-
-            C_1[i][y, x] = 1
-    elif False:
-        for i in range(N_1):
-            x = ev.width / (N_1 + 1) * (i + 1)
-            y = ev.height / (N_1 + 1) * (i + 1)
-
-            C_1[i][y, x] = 1
-    elif False:
-        # hard-coded locations
-        C_1[0][12, 11] = 1
-        C_1[1][13, 16] = 1
-        C_1[2][26, 8] = 1
-        C_1[3][24, 17] = 1
-    else:
-        for i in range(N_1):
-            x = event_data_filt[i].x
-            y = event_data_filt[i].y
-
-            S_init.process_event(event_data_filt[i])
-
-            C_1[i] = S_init.time_surface
-
-    if True:
-        fig, ax = plt.subplots(1, N_1, figsize=(25, 5))
-
-        for i in range(N_1):
-            ax[i].imshow(C_1[i])
-            ax[i].set_title('Time surface {}'.format(i))
-
-        plt.show()
+    C_1 = initialise_time_surface_prototypes(N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, plot=False)
 
     # ############ Train time surface prototypes for layer 1 ############
 
@@ -152,7 +214,7 @@ if __name__ == '__main__':
 
         # update prototype that is closest to
 
-        alpha = 0.01 / (1 + p[k] / 20000.)      # TODO: is this value set equal to the time constant or is it a coincidence?
+        alpha = 0.01 / (1 + p[k] / 20000.)
 
         beta = cosine_dist(C_1[k].reshape(-1), S.time_surface.reshape(-1))
         C_1[k] += alpha * (S.time_surface - beta * C_1[k])
@@ -169,3 +231,61 @@ if __name__ == '__main__':
         ax[i].set_title('Layer 1. Time surface {} (p={})'.format(i, p[i]))
 
     plt.show()
+
+    # ############ Train time surface prototypes for layer 2 ############
+
+    # generate event data at output of layer 1 (using the trained features)
+
+    event_data_2 = generate_layer_outputs(polarities=2, features=C_1, tau=tau_1, r=r_1, width=ev.width,
+                                          height=ev.height, events=event_data_filt)
+
+    # initialise and plot each of the time surface prototypes
+
+    C_2 = initialise_time_surface_prototypes(N_2, tau_2, r_2, ev.width, ev.height, event_data_2, plot=True)
+
+    # # initialise time surface
+    # S_on = TimeSurface(ev.height, ev.width, region_size=r_2, time_constant=tau_2)
+    # S_off = TimeSurface(ev.height, ev.width, region_size=r_2, time_constant=tau_2)
+    #
+    # p = [1] * N_1
+    #
+    # for e in event_data_filt:
+    #
+    #     if e.p:
+    #         S_on.process_event(e)
+    #         S = S_on
+    #     else:
+    #         S_off.process_event(e)
+    #         S = S_off
+    #
+    #     # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
+    #
+    #     dists = [euclidean_dist(c_k.reshape(-1), S.time_surface.reshape(-1)) for c_k in C_1]
+    #
+    #     k = np.argmin(dists)
+    #
+    #     print('k:', k, dists)
+    #
+    #     # update prototype that is closest to
+    #
+    #     alpha = 0.01 / (1 + p[k] / 20000.)
+    #
+    #     beta = cosine_dist(C_1[k].reshape(-1), S.time_surface.reshape(-1))
+    #     C_1[k] += alpha * (S.time_surface - beta * C_1[k])
+    #
+    #     p[k] += 1
+    #
+    # print k
+    # print(e, dists, k, alpha, beta, p)
+    #
+    # fig, ax = plt.subplots(1, N_1, figsize=(25, 5))
+    #
+    # for i in range(N_1):
+    #     ax[i].imshow(C_1[i])
+    #     ax[i].set_title('Layer 1. Time surface {} (p={})'.format(i, p[i]))
+    #
+    # plt.show()
+
+
+if __name__ == '__main__':
+    main()
