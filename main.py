@@ -7,6 +7,7 @@ import glob
 from event_Python import eventvision
 from lib.spatio_temporal_feature import TimeSurface
 from lib.utils import cosine_dist, euclidean_dist
+from lib.noise_filter import remove_isolated_pixels
 
 
 if __name__ == '__main__':
@@ -39,7 +40,12 @@ if __name__ == '__main__':
     # set time to pause at
     t_pause = 70000
 
-    for e in ev.data:
+    # filter out outliers
+
+    event_data = ev.data
+    event_data_filt, _, _ = remove_isolated_pixels(event_data, eps=3, min_samples=20)
+
+    for e in event_data_filt:
         if e.ts <= t_pause:
             if e.p:
                 ts_1_1.process_event(e)
@@ -75,8 +81,8 @@ if __name__ == '__main__':
 
     if False:
         for i in range(N_1):
-            x = ev.data[i].x
-            y = ev.data[i].y
+            x = event_data_filt[i].x
+            y = event_data_filt[i].y
 
             C_1[i][y, x] = 1
     elif False:
@@ -93,10 +99,10 @@ if __name__ == '__main__':
         C_1[3][24, 17] = 1
     else:
         for i in range(N_1):
-            x = ev.data[i].x
-            y = ev.data[i].y
+            x = event_data_filt[i].x
+            y = event_data_filt[i].y
 
-            S_init.process_event(ev.data[i])
+            S_init.process_event(event_data_filt[i])
 
             C_1[i] = S_init.time_surface
 
@@ -112,9 +118,14 @@ if __name__ == '__main__':
     # ############ Train time surface prototypes for layer 1 ############
 
     event_data = []
+    event_data_filt = []
 
     for f in input_files_all:
-        event_data.extend(eventvision.read_dataset(f).data)
+        ev_data = eventvision.read_dataset(f).data
+        ev_data_filt = remove_isolated_pixels(ev_data, eps=3, min_samples=20)[0]
+
+        event_data.extend(ev_data)
+        event_data_filt.extend(ev_data_filt)
 
     # initialise time surface
     S_on = TimeSurface(ev.height, ev.width, region_size=r_1, time_constant=tau_1)
@@ -122,7 +133,7 @@ if __name__ == '__main__':
 
     p = [1] * N_1
 
-    for e in event_data: #[:20]:
+    for e in event_data_filt:
 
         if e.p:
             S_on.process_event(e)
