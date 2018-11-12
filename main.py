@@ -205,7 +205,7 @@ def main():
 
     args = parser.parse_args()
 
-    # ############ configure network parameters ###########
+    # --------------- configure network parameters ---------------
 
     N_1 = 4
     tau_1 = 20000
@@ -219,7 +219,11 @@ def main():
     tau_2 = tau_1 * K_tau
     r_2 = r_1 * K_r
 
-    # ########## get event data files within folders ##########
+    N_3 = N_2 * K_N
+    tau_3 = tau_2 * K_tau
+    r_3 = r_2 * K_r
+
+    # --------------- get event data files within folders ---------------
 
     input_files_all = []
 
@@ -246,13 +250,13 @@ def main():
 
     visualise_time_surface_for_event_stream(N_1, tau_1, r_1, ev.width, ev.height, ev.data)
 
-    # ############ Train time surface prototypes for layer 1 ############
+    # --------------- Train time surface prototypes for layer 1 ---------------
 
     C_1 = initialise_time_surface_prototypes(N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, plot=True)
 
     train_layer(C_1, N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, polarities=2, layer_number=1, plot=True)
 
-    # ############ Train time surface prototypes for layer 2 ############
+    # --------------- Train time surface prototypes for layer 2 ---------------
 
     # generate event data at output of layer 1 (using the trained features)
 
@@ -262,6 +266,17 @@ def main():
     C_2 = initialise_time_surface_prototypes(N_2, tau_2, r_2, ev.width, ev.height, event_data_2, plot=True)
 
     train_layer(C_2, N_2, tau_2, r_2, ev.width, ev.height, event_data_2, polarities=N_1, layer_number=2, plot=True)
+
+    # --------------- Train time surface prototypes for layer 2 ---------------
+
+    # generate event data at output of layer 1 (using the trained features)
+
+    event_data_3 = generate_layer_outputs(polarities=N_1, features=C_2, tau=tau_2, r=r_2, width=ev.width,
+                                          height=ev.height, events=event_data_2)
+
+    C_3 = initialise_time_surface_prototypes(N_3, tau_3, r_3, ev.width, ev.height, event_data_3, plot=True)
+
+    train_layer(C_3, N_3, tau_3, r_3, ev.width, ev.height, event_data_3, polarities=N_2, layer_number=3, plot=True)
 
 
 if __name__ == '__main__':
