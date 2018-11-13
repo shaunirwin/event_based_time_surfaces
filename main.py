@@ -46,7 +46,7 @@ def visualise_time_surface_for_event_stream(N, tau, r, width, height, events):
         plt.show()
 
 
-def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_method=3, plot=False):
+def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_method=3, plot=False):    # TODO: set default init method to 4
     """
     Initialise time surface prototypes ("features" or "cluster centers") for a layer
 
@@ -79,7 +79,7 @@ def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_me
             y = height / (N + 1) * (i + 1)
 
             C[i][y, x] = 1
-    elif init_method == 2:
+    elif init_method == 3:
         # hard-coded locations
         C[0][12, 11] = 1
         C[1][13, 16] = 1
@@ -104,7 +104,7 @@ def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_me
     return C
 
 
-def train_layer(C, N, tau, r, width, height, events, polarities, layer_number, plot=False):
+def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_number, plot=False):
     """
     Train the time surface prototypes in a single layer
 
@@ -115,23 +115,29 @@ def train_layer(C, N, tau, r, width, height, events, polarities, layer_number, p
     :param width:
     :param height:
     :param events:
-    :param polarities:
+    :param num_polarities:
     :param layer_number: the number of this layer
     :param plot:
     :return:
     """
 
     # initialise time surface
-    S = [TimeSurface(height, width, region_size=r, time_constant=tau)] * polarities
+    S = [TimeSurface(height, width, region_size=r, time_constant=tau) for _ in range(num_polarities)]
 
     p = [1] * N
 
-    for e in events:
+    alpha_hist = []
+    beta_hist = []
+    p_hist = []
+    k_hist = []
+    diists_hist = []
+
+    for i, e in enumerate(events): #[:10154]:
         S[e.p].process_event(e)
 
         # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
 
-        dists = [euclidean_dist(c_k.reshape(-1), S[e.p].time_surface.reshape(-1)) for c_k in C]
+        dists = [euclidean_dist(c_k.reshape(-1), S[e.p].time_surface.reshape(-1)) for c_k in C]     # TODO: check that this makes sense!
 
         k = np.argmin(dists)
 
@@ -146,24 +152,62 @@ def train_layer(C, N, tau, r, width, height, events, polarities, layer_number, p
 
         p[k] += 1
 
+        if False:   # TODO: testing
+            if i % 500 == 0:
+                fig, ax = plt.subplots(1, N, figsize=(25, 5))
+                for i in range(N):
+                    ax[i].imshow(C[i])
+                    ax[i].set_title('Layer {}. Time surface {} (p={})'.format(layer_number, i, p[i]))
+                plt.show()
+
+        # record history of values for debugging purposes
+
+        alpha_hist.append(alpha)
+        beta_hist.append(beta)
+        p_hist.append(p[:])
+        k_hist.append(k)
+        diists_hist.append(dists[:])
+
     print k
     print(e, dists, k, alpha, beta, p)
 
     if plot:
+        p_hist = np.array(p_hist)
+        diists_hist = np.array(diists_hist)
+
         fig, ax = plt.subplots(1, N, figsize=(25, 5))
 
         for i in range(N):
             ax[i].imshow(C[i])
             ax[i].set_title('Layer {}. Time surface {} (p={})'.format(layer_number, i, p[i]))
 
+        fig, ax = plt.subplots(5, 1, sharex=True)
+        ax[0].plot(alpha_hist, label='alpha')
+        ax[1].plot(beta_hist, label='beta')
+        for j in range(p_hist.shape[1]):
+            ax[2].plot(p_hist[:, j], label='p_{}'.format(j))
+        ax[2].legend()
+        for j in range(diists_hist.shape[1]):
+            ax[3].plot(diists_hist[:, j], label='dist_{}'.format(j))
+        ax[3].legend()
+        ax[4].plot(beta_hist, label='k')
+        ax[0].set_title('alpha')
+        ax[1].set_title('beta')
+        ax[2].set_title('p')
+        ax[3].set_title('dists')
+        ax[4].set_title('k')
+
+        # TODO: plot distances too, and visualise. Maybe euler distance is not correct?
+        # TODO: why are the time surface pixel values climbing so high?
+
         plt.show()
 
 
-def generate_layer_outputs(polarities, features, tau, r, width, height, events):
+def generate_layer_outputs(num_polarities, features, tau, r, width, height, events):
     """
     Generate events at the output of a layer from a stream of incoming events
 
-    :param polarities: number of polarities of incoming events
+    :param num_polarities: number of polarities of incoming events
     :param features: list of trained features for this layer
     :param tau: time constant [us]
     :param r: radius [pixels]
@@ -173,7 +217,7 @@ def generate_layer_outputs(polarities, features, tau, r, width, height, events):
     :return: events at output of layer
     """
 
-    S = [TimeSurface(height, width, region_size=r, time_constant=tau)] * polarities
+    S = [TimeSurface(height, width, region_size=r, time_constant=tau) for _ in range(num_polarities)]
     events_out = []
 
     for e in events:
@@ -254,29 +298,29 @@ def main():
 
     C_1 = initialise_time_surface_prototypes(N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, plot=True)
 
-    train_layer(C_1, N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, polarities=2, layer_number=1, plot=True)
+    train_layer(C_1, N_1, tau_1, r_1, ev.width, ev.height, event_data_filt, num_polarities=2, layer_number=1, plot=True)
 
     # --------------- Train time surface prototypes for layer 2 ---------------
 
     # generate event data at output of layer 1 (using the trained features)
 
-    event_data_2 = generate_layer_outputs(polarities=2, features=C_1, tau=tau_1, r=r_1, width=ev.width,
+    event_data_2 = generate_layer_outputs(num_polarities=2, features=C_1, tau=tau_1, r=r_1, width=ev.width,
                                           height=ev.height, events=event_data_filt)
 
     C_2 = initialise_time_surface_prototypes(N_2, tau_2, r_2, ev.width, ev.height, event_data_2, plot=True)
 
-    train_layer(C_2, N_2, tau_2, r_2, ev.width, ev.height, event_data_2, polarities=N_1, layer_number=2, plot=True)
+    train_layer(C_2, N_2, tau_2, r_2, ev.width, ev.height, event_data_2, num_polarities=N_1, layer_number=2, plot=True)
 
     # --------------- Train time surface prototypes for layer 2 ---------------
 
     # generate event data at output of layer 1 (using the trained features)
 
-    event_data_3 = generate_layer_outputs(polarities=N_1, features=C_2, tau=tau_2, r=r_2, width=ev.width,
+    event_data_3 = generate_layer_outputs(num_polarities=N_1, features=C_2, tau=tau_2, r=r_2, width=ev.width,
                                           height=ev.height, events=event_data_2)
 
     C_3 = initialise_time_surface_prototypes(N_3, tau_3, r_3, ev.width, ev.height, event_data_3, plot=True)
 
-    train_layer(C_3, N_3, tau_3, r_3, ev.width, ev.height, event_data_3, polarities=N_2, layer_number=3, plot=True)
+    train_layer(C_3, N_3, tau_3, r_3, ev.width, ev.height, event_data_3, num_polarities=N_2, layer_number=3, plot=True)
 
 
 if __name__ == '__main__':
