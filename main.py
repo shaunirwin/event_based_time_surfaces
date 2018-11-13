@@ -1,8 +1,10 @@
+from __future__ import print_function
 from matplotlib import pyplot as plt
 import numpy as np
 import argparse
 import os
 import glob
+from copy import deepcopy
 
 from event_Python import eventvision
 from lib.spatio_temporal_feature import TimeSurface
@@ -131,13 +133,15 @@ def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_numbe
     p_hist = []
     k_hist = []
     diists_hist = []
+    S_prev = deepcopy(S)
+    event_times = []
 
     for i, e in enumerate(events): #[:10154]:
         S[e.p].process_event(e)
 
         # find closest cluster center (i.e. closest time surface prototype, according to euclidean distance)
 
-        dists = [euclidean_dist(c_k.reshape(-1), S[e.p].time_surface.reshape(-1)) for c_k in C]     # TODO: check that this makes sense!
+        dists = [euclidean_dist(c_k.reshape(-1), S[e.p].time_surface.reshape(-1)) for c_k in C]
 
         k = np.argmin(dists)
 
@@ -145,7 +149,7 @@ def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_numbe
 
         # update prototype that is closest to
 
-        alpha = 0.01 / (1 + p[k] / 20000.)
+        alpha = 0.01 / (1 + p[k] / 20000.)     # TODO: testing. If p[k] >> 0 then alpha -> 0 (maybe reset p after each event stream?)
 
         beta = cosine_dist(C[k].reshape(-1), S[e.p].time_surface.reshape(-1))
         C[k] += alpha * (S[e.p].time_surface - beta * C[k])
@@ -167,8 +171,9 @@ def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_numbe
         p_hist.append(p[:])
         k_hist.append(k)
         diists_hist.append(dists[:])
+        S_prev = deepcopy(S)
+        event_times.append(e.ts)
 
-    print k
     print(e, dists, k, alpha, beta, p)
 
     if plot:
@@ -181,7 +186,7 @@ def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_numbe
             ax[i].imshow(C[i])
             ax[i].set_title('Layer {}. Time surface {} (p={})'.format(layer_number, i, p[i]))
 
-        fig, ax = plt.subplots(5, 1, sharex=True)
+        fig, ax = plt.subplots(6, 1, sharex=True)
         ax[0].plot(alpha_hist, label='alpha')
         ax[1].plot(beta_hist, label='beta')
         for j in range(p_hist.shape[1]):
@@ -191,14 +196,13 @@ def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_numbe
             ax[3].plot(diists_hist[:, j], label='dist_{}'.format(j))
         ax[3].legend()
         ax[4].plot(beta_hist, label='k')
+        ax[5].plot(event_times, label='e.ts')
         ax[0].set_title('alpha')
         ax[1].set_title('beta')
         ax[2].set_title('p')
         ax[3].set_title('dists')
         ax[4].set_title('k')
-
-        # TODO: plot distances too, and visualise. Maybe euler distance is not correct?
-        # TODO: why are the time surface pixel values climbing so high?
+        ax[5].set_title('e.ts')
 
         plt.show()
 
@@ -287,8 +291,24 @@ def main():
         ev_data = eventvision.read_dataset(f).data
         ev_data_filt = remove_isolated_pixels(ev_data, eps=3, min_samples=20)[0]
 
+        # ensure time stamps in event stream are monotonically increasing
+
+        if len(event_data) > 0:
+            ts_start_0 = event_data[-1].ts
+
+            for i in range(len(ev_data)):
+                ev_data[i].ts += ts_start_0
+
+        if len(event_data_filt) > 0:
+            ts_start_1 = event_data_filt[-1].ts
+
+            for i in range(len(ev_data_filt)):
+                ev_data_filt[i].ts += ts_start_1
+
         event_data.extend(ev_data)
         event_data_filt.extend(ev_data_filt)
+
+        print('length event stream:', len(ev_data), len(ev_data_filt))
 
     # plot time surface for single event sequence
 

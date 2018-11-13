@@ -1,4 +1,5 @@
 import numpy as np
+from copy import deepcopy
 from sklearn.cluster import DBSCAN
 
 
@@ -32,6 +33,8 @@ def remove_isolated_pixels(event_data, eps=3, min_samples=20):
 
     points_filt = points[core_samples_mask, :]
 
-    event_data_filt = [e for i, e in enumerate(event_data) if core_samples_mask[i]]
+    event_data_copy = deepcopy(event_data)
+
+    event_data_filt = [e for i, e in enumerate(event_data_copy) if core_samples_mask[i]]
 
     return event_data_filt, points, points_filt

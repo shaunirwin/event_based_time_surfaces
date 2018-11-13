@@ -50,4 +50,6 @@
 
 * Using multiple digits' event streams:
     * Needed to ensure timestamps monotonically increasing
-    * Still some discontinuities due to changing appearance (need to confirm)
+    * Still some discontinuities due to changing appearance. Causes sudden change in time surface, which causes big spike in euler dist calc.
+* The paper does not mention any details of the dynamics during the training (clustering) process
+    * It would be useful to show some plots of distances to each prototype or other variables to see whether convergence is actually achieved, or is trained just concluded at a chosen time.
