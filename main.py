@@ -37,10 +37,10 @@ def visualise_time_surface_for_event_stream(N, tau, r, width, height, events):
         fig, ax = plt.subplots(2, 3, figsize=(10, 5))
         ax[0, 0].imshow(ts_1_1.latest_times)
         ax[0, 1].imshow(ts_1_1.time_context)
-        ax[0, 2].imshow(ts_1_1.time_surface)
+        ax[0, 2].imshow(ts_1_1.time_surface, vmin=0, vmax=1)
         ax[1, 0].imshow(ts_1_2.latest_times)
         ax[1, 1].imshow(ts_1_2.time_context)
-        ax[1, 2].imshow(ts_1_2.time_surface)
+        ax[1, 2].imshow(ts_1_2.time_surface, vmin=0, vmax=1)
         ax[0, 0].set_title('Latest times')
         ax[0, 1].set_title('Time context')
         ax[0, 2].set_title('Time surface')
@@ -98,7 +98,7 @@ def initialise_time_surface_prototypes(N, tau, r, width, height, events, init_me
         fig, ax = plt.subplots(1, N, figsize=(20, 5))
 
         for i in range(N):
-            ax[i].imshow(C[i])
+            ax[i].imshow(C[i], vmin=0, vmax=1)
             ax[i].set_title('Time surface {}'.format(i))
 
         plt.show()
@@ -160,7 +160,7 @@ def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_numbe
             if i % 500 == 0:
                 fig, ax = plt.subplots(1, N, figsize=(25, 5))
                 for i in range(N):
-                    ax[i].imshow(C[i])
+                    ax[i].imshow(C[i], vmin=0, vmax=1)
                     ax[i].set_title('Layer {}. Time surface {} (p={})'.format(layer_number, i, p[i]))
                 plt.show()
 
@@ -183,7 +183,7 @@ def train_layer(C, N, tau, r, width, height, events, num_polarities, layer_numbe
         fig, ax = plt.subplots(1, N, figsize=(25, 5))
 
         for i in range(N):
-            ax[i].imshow(C[i])
+            ax[i].imshow(C[i], vmin=0, vmax=1)
             ax[i].set_title('Layer {}. Time surface {} (p={})'.format(layer_number, i, p[i]))
 
         fig, ax = plt.subplots(6, 1, sharex=True)
