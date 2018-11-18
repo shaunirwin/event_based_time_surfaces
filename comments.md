@@ -53,3 +53,11 @@
     * Still some discontinuities due to changing appearance. Causes sudden change in time surface, which causes big spike in euler dist calc.
 * The paper does not mention any details of the dynamics during the training (clustering) process
     * It would be useful to show some plots of distances to each prototype or other variables to see whether convergence is actually achieved, or is trained just concluded at a chosen time.
+* "Cluster center" term needs to be clearly defined:
+    * Is it synonymous with "time surface prototype" or does it refer to a center coordinate of the pixel values? If the latter, then how is this calculated? 
+* No discussion on how the time constants were chosen with regard to the time constants of the dataset (e.g. how fast the objects were moving)?
+
+
+## Other datasets available
+
+* http://www2.imse-cnm.csic.es/caviar/MNIST_DVS/
